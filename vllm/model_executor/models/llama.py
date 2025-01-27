@@ -20,12 +20,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Inference-only LLaMA model compatible with HuggingFace weights."""
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
-
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Type, Union, Mapping
+from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
+                                    MultiModalInputs, MultiModalKwargs,
+                                    NestedTensors)
 import torch
 from torch import nn
-from transformers import LlamaConfig
-
+from transformers import LlamaConfig, BatchFeature
+from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.attention import Attention, AttentionMetadata
 from vllm.compilation.decorators import support_torch_compile
 from vllm.config import CacheConfig, VllmConfig
@@ -48,13 +50,15 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.platforms import current_platform
 from vllm.sequence import IntermediateTensors
 
-from .interfaces import SupportsLoRA, SupportsPP
+from .interfaces import SupportsLoRA, SupportsPP, SupportsMultiModal
 from .utils import (AutoWeightsLoader, PPMissingLayer, extract_layer_index,
                     is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
 
+# def map_input_llama÷
 
+    
 class LlamaMLP(nn.Module):
 
     def __init__(
@@ -467,7 +471,7 @@ class LlamaModel(nn.Module):
                                    "factor attribute!")
 
 
-class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
+class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP, SupportsMultiModal):
     packed_modules_mapping = {
         "qkv_proj": ["q_proj", "k_proj", "v_proj"],
         "gate_up_proj": ["gate_proj", "up_proj"]
@@ -550,9 +554,18 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
 
     def _init_model(self, vllm_config: VllmConfig, prefix: str = ""):
         return LlamaModel(vllm_config=vllm_config, prefix=prefix)
-
-    def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
-        return self.model.get_input_embeddings(input_ids)
+    
+    def get_multimodal_embeddings(self, **kwargs: object):
+        # Return the first argument in kwargs
+        if kwargs:
+            return next(iter(kwargs.values()))
+    
+    def get_input_embeddings(self, input_ids: torch.Tensor,multimodal_embeddings: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if multimodal_embeddings is None:
+            return self.model.get_input_embeddings(input_ids)
+        else:
+            return multimodal_embeddings
+    
 
     def forward(
         self,
@@ -561,11 +574,14 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
+        image: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        if image is not None and type(image) != torch.Tensor:
+            "concatenate multimodal embeddings"
+            image = torch.cat(image, axis=0)
         model_output = self.model(input_ids, positions, kv_caches,
                                   attn_metadata, intermediate_tensors,
-                                  inputs_embeds)
+                                  image)
         return model_output
 
     def compute_logits(

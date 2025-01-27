@@ -683,10 +683,11 @@ class ModelInputForGPUBuilder(ModelRunnerInputBuilderBase[ModelInputForGPU]):
         if self.runner.mm_registry.has_processor(self.runner.model_config):
             mm_kwargs = mm_data
         else:
-            mm_kwargs = self.multi_modal_input_mapper(
-                mm_data,
-                seq_group_metadata.mm_processor_kwargs,
-            )
+            # mm_kwargs = self.multi_modal_input_mapper(
+            #     mm_data,
+            #     seq_group_metadata.mm_processor_kwargs,
+            # )
+            mm_kwargs = mm_data
 
         inter_data.multi_modal_kwargs = mm_kwargs
         inter_data.multi_modal_placeholder_maps = placeholder_maps
