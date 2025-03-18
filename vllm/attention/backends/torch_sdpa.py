@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """ Attention layer with torch scaled_dot_product_attention
     and PagedAttention."""
 from dataclasses import dataclass
@@ -6,13 +7,17 @@ from typing import Any, Dict, List, Optional, Tuple, Type
 import torch
 from torch.nn.functional import scaled_dot_product_attention
 
+# yapf conflicts with isort for this block
+# yapf: disable
 from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
                                               AttentionLayer,
                                               AttentionMetadata,
                                               AttentionMetadataBuilder,
-                                              AttentionType)
+                                              AttentionType,
+                                              is_quantized_kv_cache)
+# yapf: enable
 from vllm.attention.backends.utils import CommonAttentionState
-from vllm.attention.ops.ipex_attn import PagedAttention
+from vllm.attention.ops.ipex_attn import PagedAttention, _use_ipex
 from vllm.attention.ops.paged_attn import PagedAttentionMetadata
 from vllm.logger import init_logger
 from vllm.utils import make_tensor_with_pad
@@ -379,6 +384,7 @@ class TorchSDPAMetadataBuilder(AttentionMetadataBuilder[TorchSDPAMetadata]):
             prefill_block_tables=prefill_block_tables,
             slot_mapping=slot_mapping,
             multi_modal_placeholder_index_maps=placeholder_index_maps,
+            enable_kv_scales_calculation=False,
         )
 
         return attn_metadata
@@ -425,10 +431,11 @@ class TorchSDPABackendImpl(AttentionImpl[TorchSDPAMetadata]):
             raise ValueError(
                 f"Head size {head_size} is not supported by PagedAttention. "
                 f"Supported head sizes are: {supported_head_sizes}.")
-        if kv_cache_dtype != "auto":
+
+        if is_quantized_kv_cache(kv_cache_dtype) and not _use_ipex:
             raise NotImplementedError(
-                "Torch SDPA backend does not support FP8 KV cache. "
-                "Please use xFormers backend instead.")
+                "Torch SDPA backend FP8 KV cache requires "
+                "intel_extension_for_pytorch support.")
         self.attn_type = attn_type
 
     def forward(
@@ -454,7 +461,6 @@ class TorchSDPABackendImpl(AttentionImpl[TorchSDPAMetadata]):
         Returns:
             shape = [num_tokens, num_heads * head_size]
         """
-        assert layer._k_scale == 1.0 and layer._v_scale == 1.0
         attn_type = self.attn_type
         if (attn_type == AttentionType.ENCODER
                 and (not attn_metadata.is_all_encoder_attn_metadata_set)):

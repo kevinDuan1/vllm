@@ -1,13 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 
 from vllm import LLM
 
-from ...utils import fork_new_process_for_each_test
+from ...utils import create_new_process_for_each_test
 
 
 @pytest.mark.parametrize("tp_size", [1, 2])
 @pytest.mark.parametrize("backend", ["mp", "ray"])
-@fork_new_process_for_each_test
+@create_new_process_for_each_test()
 def test_collective_rpc(tp_size, backend):
     if tp_size == 1 and backend == "ray":
         pytest.skip("Skip duplicate test case")

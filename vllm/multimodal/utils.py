@@ -1,4 +1,5 @@
-from functools import lru_cache
+# SPDX-License-Identifier: Apache-2.0
+
 from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, TypeVar, Union
@@ -6,22 +7,21 @@ from urllib.parse import ParseResult, urlparse
 
 import numpy as np
 import numpy.typing as npt
+import torch
 from PIL import Image
 
 import vllm.envs as envs
 from vllm.connections import HTTPConnection, global_http_connection
 from vllm.logger import init_logger
-from vllm.transformers_utils.tokenizer import AnyTokenizer, get_tokenizer
+from vllm.transformers_utils.tokenizer import AnyTokenizer
 
 from .audio import AudioMediaIO
 from .base import MediaIO
-from .image import ImageMediaIO
+from .image import ImageEmbeddingMediaIO, ImageMediaIO
 from .inputs import PlaceholderRange
 from .video import VideoMediaIO
 
 logger = init_logger(__name__)
-
-cached_get_tokenizer = lru_cache(get_tokenizer)
 
 _M = TypeVar("_M")
 
@@ -245,6 +245,17 @@ class MediaConnector:
             video_io,
             fetch_timeout=envs.VLLM_VIDEO_FETCH_TIMEOUT,
         )
+
+    def fetch_image_embedding(
+        self,
+        data: str,
+    ) -> torch.Tensor:
+        """
+        Load image embedding from a URL.
+        """
+        image_embedding_io = ImageEmbeddingMediaIO()
+
+        return image_embedding_io.load_base64("", data)
 
 
 global_media_connector = MediaConnector()
@@ -503,8 +514,13 @@ def group_mm_inputs_by_modality(
         if len(mm_input.modalities) > 1:
             return id(mm_input)
 
-        # Otherwise return the modality string
-        return list(mm_input.modalities)[0]
+        elif len(mm_input.modalities) == 1:
+            return list(mm_input.modalities)[0]
+
+        # FIXME(Isotr0py): Modality of mm_input from legacy pipeline is empty,
+        # this is used to make InternVL with legacy pipeline still work with v1.
+        else:
+            return ""
 
     return [
         list(group) for _, group in groupby(mm_inputs, key=modality_group_func)

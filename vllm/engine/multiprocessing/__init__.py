@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -121,6 +123,31 @@ class RPCUProfileRequest(Enum):
     STOP_PROFILE = 2
 
 
+class RPCResetPrefixCacheRequest(Enum):
+    RESET_PREFIX_CACHE = 1
+
+
+class RPCSleepRequest(Enum):
+    SLEEP_LEVEL_1 = 1
+    SLEEP_LEVEL_2 = 2
+
+
+class RPCWakeUpRequest(Enum):
+    WAKE_UP = 1
+
+
+@dataclass
+class RPCIsSleepingRequest:
+    # Set the default value of request_id to a new UUID
+    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+
+@dataclass
+class RPCIsSleepingResponse:
+    request_id: str
+    is_sleeping: bool
+
+
 @dataclass
 class RPCLoadAdapterRequest:
     lora_request: LoRARequest
@@ -134,10 +161,12 @@ class RPCAdapterLoadedResponse:
 
 
 RPC_REQUEST_T = Union[RPCProcessRequest, RPCAbortRequest, RPCStartupRequest,
-                      RPCUProfileRequest, RPCLoadAdapterRequest]
+                      RPCUProfileRequest, RPCLoadAdapterRequest,
+                      RPCResetPrefixCacheRequest, RPCSleepRequest,
+                      RPCWakeUpRequest, RPCIsSleepingRequest]
 
 REQUEST_OUTPUTS_T = Union[List[RequestOutput], RPCAdapterLoadedResponse,
-                          RPCError]
+                          RPCIsSleepingResponse, RPCError]
 
 
 def ENGINE_DEAD_ERROR(
