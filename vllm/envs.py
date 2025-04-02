@@ -546,6 +546,7 @@ environment_variables: Dict[str, Callable[[], Any]] = {
 
 def __getattr__(name: str):
     # lazy evaluation of environment variables
+ 
     if name in environment_variables:
         return environment_variables[name]()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

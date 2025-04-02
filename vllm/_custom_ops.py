@@ -136,6 +136,7 @@ def rotary_embedding(
     if len(query.shape) == 3:
         query = query[0]
         key = key[0]
+        
     torch.ops._C.rotary_embedding(positions, query, key, head_size,
                                   cos_sin_cache, is_neox)
 
